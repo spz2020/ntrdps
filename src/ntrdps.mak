@@ -24,6 +24,7 @@ BEARSSL_OBJS = \
         tls\bearssl\src\sysrng.obj tls\bearssl\src\x509_decoder.obj
 !ifdef TLS
 LOGIN_OBJS = core\auth.obj tls\pwhash.obj rdp\login.obj rdp\ldlg.obj \
+        rdp\gina.obj \
         rdp\lfont.obj
 TLS_OBJS = tls\tls.obj tls\testcert.obj $(LOGIN_OBJS) $(BEARSSL_OBJS)
 T_LOGIN  = rdp\login.obj rdp\lfont.obj tests\tauth.obj tests\tldlg.obj

@@ -8,6 +8,7 @@
 #include "auth.h"
 #include "core.h"
 #include "desktop.h"
+#include "gina.h"
 #include "keymap.h"
 #include "ldlg.h"
 #include "tls.h"
@@ -19,6 +20,7 @@
 #define REDRAW_MS    1000
 #define OPEN_WAIT_MS 20000
 #define END_WAIT_MS  5000
+#define SLOW_MS      2000
 #define EVT_MAX      256
 #define KEYQ_MAX     16
 #define TOPS_MAX     16
@@ -141,6 +143,8 @@ typedef LONG (WINAPI *LSA_FREE)(PVOID);
 typedef LONG (WINAPI *LSA_CLOSE)(HANDLE);
 typedef HANDLE (WINAPI *LOAD_IMAGE)(HINSTANCE, LPCSTR, UINT, int, int,
                                     UINT);
+typedef HBITMAP (WINAPI *CREATE_DIB)(HDC, CONST BITMAPINFO *, UINT,
+                                     VOID **, HANDLE, DWORD);
 
 struct LDLG_s {
     CRITICAL_SECTION lock;
@@ -200,6 +204,9 @@ struct LDLG_s {
     int              self;
     SELST            sel[2];
     HBITMAP          arrow;
+    int              gina;
+    int              gina_end;
+    int              dib;
 };
 
 static int g_class;
@@ -1786,6 +1793,37 @@ static void publish(LDLG *d, const RECT *area, int w, int h)
     LeaveCriticalSection(&d->lock);
 }
 
+static int low_colors(void)
+{
+    HDC dc = GetDC(NULL);
+    int low = dc != NULL && GetDeviceCaps(dc, BITSPIXEL) <= 8;
+
+    if (dc != NULL) {
+        ReleaseDC(NULL, dc);
+    }
+    return low;
+}
+
+static HBITMAP dib24(int w, int h)
+{
+    CREATE_DIB p_dib = (CREATE_DIB) GetProcAddress(
+                           GetModuleHandleA("GDI32.DLL"), "CreateDIBSection");
+    BITMAPINFO bi;
+    VOID *bits;
+
+    if (p_dib == NULL) {
+        return NULL;
+    }
+    memset(&bi, 0, sizeof(bi));
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = h;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 24;
+    bi.bmiHeader.biCompression = BI_RGB;
+    return p_dib(NULL, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+}
+
 static void render(LDLG *d)
 {
     HWND t[TOPS_MAX];
@@ -1793,7 +1831,7 @@ static void render(LDLG *d)
     RECT now, area, r, screen;
     HDC sdc;
     HBRUSH desk;
-    int n = tops(d, t, TOPS_MAX), i, w, h;
+    int n = tops(d, t, TOPS_MAX), i, w, h, dib;
 
     d->redraw = 0;
     d->drawn_ms = GetTickCount();
@@ -1815,7 +1853,8 @@ static void render(LDLG *d)
     }
     w = area.right - area.left;
     h = area.bottom - area.top;
-    if (d->mbm == NULL || w != d->mw || h != d->mh) {
+    dib = d->gina && low_colors();
+    if (d->mbm == NULL || w != d->mw || h != d->mh || dib != d->dib) {
         if (d->mbm != NULL) {
             SelectObject(d->mdc, d->mold);
             DeleteObject(d->mbm);
@@ -1825,7 +1864,9 @@ static void render(LDLG *d)
         d->rows = (unsigned char *) malloc((((size_t) w * 3 + 3) & ~3UL) *
                                            (size_t) h);
         sdc = GetDC(NULL);
-        d->mbm = sdc != NULL ? CreateCompatibleBitmap(sdc, w, h) : NULL;
+        d->mbm = dib ? dib24(w, h) : sdc != NULL
+                 ? CreateCompatibleBitmap(sdc, w, h) : NULL;
+        d->dib = dib;
         if (sdc != NULL) {
             ReleaseDC(NULL, sdc);
         }
@@ -1880,6 +1921,14 @@ static int requests(LDLG *d)
     fail = d->fail;
     d->fail = 0;
     LeaveCriticalSection(&d->lock);
+    if (end && d->gina) {
+        if (!d->gina_end) {
+            d->gina_end = 1;
+            gina_end_all();
+        }
+        d->dlg = NULL;
+        return 1;
+    }
     if (end) {
         if (d->dlg != NULL && IsWindow(d->dlg)) {
             DestroyWindow(d->dlg);
@@ -1888,10 +1937,49 @@ static int requests(LDLG *d)
         PostQuitMessage(0);
         return 1;
     }
-    if (fail) {
+    if (fail && d->dlg != NULL) {
         show_fail(d);
     }
     return 0;
+}
+
+static HWND any_top(LDLG *d)
+{
+    HWND w;
+
+    for (w = GetWindow(d->ctl, GW_HWNDFIRST); w != NULL;
+         w = GetWindow(w, GW_HWNDNEXT)) {
+        if (w != d->ctl && shown(w) && ours(d, w)) {
+            return w;
+        }
+    }
+    return NULL;
+}
+
+static void gina_tick(LDLG *d, UINT m)
+{
+    DWORD now;
+
+    if (d->dlg != NULL && !IsWindow(d->dlg)) {
+        d->dlg = NULL;
+    }
+    if (d->dlg == NULL) {
+        d->dlg = any_top(d);
+    }
+    if (requests(d) || d->dlg == NULL) {
+        return;
+    }
+    pump(d);
+    now = GetTickCount();
+    if (m == WM_TIMER && (d->redraw || d->up != 1 ||
+                          now - d->drawn_ms >= REDRAW_MS ||
+                          blinked(d, now))) {
+        render(d);
+        if (d->up == 0 && !IsRectEmpty(&d->last)) {
+            d->up = 1;
+            SetEvent(d->ready);
+        }
+    }
 }
 
 static LRESULT CALLBACK ctl_proc(HWND w, UINT m, WPARAM wp, LPARAM lp)
@@ -1923,6 +2011,10 @@ static LRESULT CALLBACK ctl_proc(HWND w, UINT m, WPARAM wp, LPARAM lp)
                 track(d);
             }
         }
+        if (d->gina) {
+            gina_tick(d, m);
+            return 0;
+        }
         if (d->dlg == NULL || requests(d) || d->dlg == NULL) {
             return 0;
         }
@@ -1935,6 +2027,17 @@ static LRESULT CALLBACK ctl_proc(HWND w, UINT m, WPARAM wp, LPARAM lp)
         return 0;
     }
     return DefWindowProcA(w, m, wp, lp);
+}
+
+static DWORD slow(LDLG *d, const char *step, DWORD t0)
+{
+    DWORD now = GetTickCount();
+
+    if (now - t0 >= SLOW_MS) {
+        log_msg(LOG_WARN, "session %s: login: %s took %lu ms", d->peer,
+                step, (unsigned long) (now - t0));
+    }
+    return now;
 }
 
 static int find_dialog(LDLG *d)
@@ -2049,19 +2152,14 @@ static int desk_shown(LDLG *d)
     return 0;
 }
 
-static int start(LDLG *d)
+static int prepare(LDLG *d)
 {
     WNDCLASSA wc;
     char name[16];
     unsigned char bg[3];
-    void *t;
-    int id = find_dialog(d);
     long i;
-    HWND f;
+    DWORD t0 = GetTickCount();
 
-    if (id == 0) {
-        return 0;
-    }
     if (!g_class) {
         memset(&wc, 0, sizeof(wc));
         wc.lpfnWndProc = ctl_proc;
@@ -2082,12 +2180,50 @@ static int start(LDLG *d)
     }
     d->ctl = CreateWindowExA(0, CLASS_NAME, "", WS_POPUP, 0, 0, 1, 1, NULL,
                              NULL, GetModuleHandleA(NULL), d);
-    t = copy_template(d, id);
-    if (d->ctl == NULL || t == NULL ||
-        SetTimer(d->ctl, TIMER_ID, TIMER_MS, NULL) == 0) {
+    t0 = slow(d, "making the hidden window", t0);
+    if (d->ctl == NULL || SetTimer(d->ctl, TIMER_ID, TIMER_MS, NULL) == 0) {
         log_msg(LOG_ERROR, "session %s: login: no window or timer, error "
                 "%lu", d->peer, (unsigned long) GetLastError());
-        free(t);
+        return 0;
+    }
+    t0 = slow(d, "the timer", t0);
+    d->mdc = CreateCompatibleDC(NULL);
+    t0 = slow(d, "the memory DC", t0);
+    d->pic_stride = (long) d->width * 3;
+    d->pic = (unsigned char *) malloc((size_t) d->pic_stride * d->height);
+    if (d->mdc == NULL || d->pic == NULL) {
+        log_msg(LOG_ERROR, "session %s: login: no memory for the picture",
+                d->peer);
+        return 0;
+    }
+    ldlg_background(bg);
+    for (i = 0; i < (long) d->width * (long) d->height; i++) {
+        d->pic[i * 3] = bg[2];
+        d->pic[i * 3 + 1] = bg[1];
+        d->pic[i * 3 + 2] = bg[0];
+    }
+    t0 = slow(d, "the first picture", t0);
+    d->km.ctx = d;
+    d->km.emit = emit;
+    d->km.map_vk = map_vk;
+    d->km.sas = sas;
+    d->km.win_keys = 1;
+    keymap_init(&d->km);
+    d->km.altgr_fake_ctrl = GetKeyboardLayoutNameA(name) &&
+                            (strtoul(name, NULL, 16) & 0xFFFF) != 0x0409;
+    slow(d, "the keyboard", t0);
+    d->phase = -1;
+    return 1;
+}
+
+static int template_dialog(LDLG *d, int id)
+{
+    void *t = copy_template(d, id);
+    HWND f;
+
+    if (t == NULL) {
+        log_msg(LOG_ERROR, "session %s: login: no dialog template %d",
+                d->peer, id);
         return 0;
     }
     if (d->look == LOOK_3X && (GetVersion() & 0xFFFF) == 0x0A03) {
@@ -2111,28 +2247,6 @@ static int start(LDLG *d)
     if (!setup_dialog(d)) {
         return 0;
     }
-    d->mdc = CreateCompatibleDC(NULL);
-    d->pic_stride = (long) d->width * 3;
-    d->pic = (unsigned char *) malloc((size_t) d->pic_stride * d->height);
-    if (d->mdc == NULL || d->pic == NULL) {
-        log_msg(LOG_ERROR, "session %s: login: no memory for the picture",
-                d->peer);
-        return 0;
-    }
-    ldlg_background(bg);
-    for (i = 0; i < (long) d->width * (long) d->height; i++) {
-        d->pic[i * 3] = bg[2];
-        d->pic[i * 3 + 1] = bg[1];
-        d->pic[i * 3 + 2] = bg[0];
-    }
-    d->km.ctx = d;
-    d->km.emit = emit;
-    d->km.map_vk = map_vk;
-    d->km.sas = sas;
-    d->km.win_keys = 1;
-    keymap_init(&d->km);
-    d->km.altgr_fake_ctrl = GetKeyboardLayoutNameA(name) &&
-                            (strtoul(name, NULL, 16) & 0xFFFF) != 0x0409;
     center(d, d->dlg);
     ShowWindow(d->dlg, SW_SHOW);
     f = GetDlgItem(d->dlg, d->init_user[0] != 0 ? d->id_pw : d->id_user);
@@ -2140,6 +2254,103 @@ static int start(LDLG *d)
     d->phase = -1;
     render(d);
     return 1;
+}
+
+static void gina_dialog(void *ctx, HWND dlg, int first)
+{
+    LDLG *d = (LDLG *) ctx;
+    HWND w;
+    RECT r;
+    LRESULT i;
+
+    if (first) {
+        d->dlg = dlg;
+        d->id_user = I50_USER;
+        d->id_pw = I50_PW;
+        d->id_dom = I50_DOMAIN;
+        SendDlgItemMessageW(dlg, I50_USER, EM_LIMITTEXT, LDLG_USER_MAX, 0);
+        SendDlgItemMessageW(dlg, I50_PW, EM_LIMITTEXT, AUTH_PW_MAX, 0);
+        if (d->init_user[0] != 0) {
+            SetDlgItemTextW(dlg, I50_USER, d->init_user);
+        }
+        SetDlgItemTextW(dlg, I50_PW, L"");
+        w = GetDlgItem(dlg, I50_DOMAIN);
+        if (w != NULL && d->init_domain[0] != 0) {
+            i = SendMessageW(w, X_CB_FINDEXACT, (WPARAM) -1,
+                             (LPARAM) d->init_domain);
+            if (i != CB_ERR) {
+                SendMessageW(w, CB_SETCURSEL, (WPARAM) i, 0);
+            }
+        }
+        GetWindowRect(dlg, &r);
+        if (r.left < 0 || r.top < 0 || r.right > (long) d->width ||
+            r.bottom > (long) d->height) {
+            center(d, dlg);
+        }
+        SetFocus(GetDlgItem(dlg, GetWindowTextLengthW(GetDlgItem(dlg,
+                 I50_USER)) > 0 ? I50_PW : I50_USER));
+    }
+    if ((w = GetDlgItem(dlg, I50_SHUT)) != NULL) {
+        EnableWindow(w, FALSE);
+    }
+    if ((w = GetDlgItem(dlg, I50_DIALUP)) != NULL) {
+        EnableWindow(w, FALSE);
+    }
+    d->redraw = 1;
+}
+
+static int gina_command(void *ctx, HWND dlg, WPARAM wp)
+{
+    LDLG *d = (LDLG *) ctx;
+
+    switch (LOWORD(wp)) {
+    case IDOK:
+        if (HIWORD(wp) == BN_CLICKED) {
+            submit(d);
+        }
+        return 1;
+    case IDCANCEL:
+        if (HIWORD(wp) == BN_CLICKED) {
+            cancel(d);
+        }
+        return 1;
+    case I50_SHUT:
+        return 1;
+    }
+    return 0;
+}
+
+static int gina_ending(void *ctx)
+{
+    LDLG *d = (LDLG *) ctx;
+    int end;
+
+    EnterCriticalSection(&d->lock);
+    end = d->end;
+    LeaveCriticalSection(&d->lock);
+    return end;
+}
+
+static int run_gina(LDLG *d, DESKTOP_THREAD *t)
+{
+    GINA_HOST h;
+    int r;
+
+    memset(&h, 0, sizeof(h));
+    h.ctx = d;
+    h.desk = t->desk;
+    h.desk_name = t->name;
+    h.peer = d->peer;
+    h.dialog = gina_dialog;
+    h.command = gina_command;
+    h.ending = gina_ending;
+    d->gina = 1;
+    r = gina_run(&h);
+    d->gina = 0;
+    d->dlg = NULL;
+    d->busy = 0;
+    d->modal = 0;
+    return r;
 }
 
 static void desk_name(char *name)
@@ -2164,17 +2375,32 @@ static DWORD WINAPI ldlg_thread(LPVOID arg)
     DESKTOP_THREAD t;
     MSG msg;
     char name[sizeof(DESK_NAME) + 20];
+    int gina, id, r, loop = 0;
+    DWORD t0 = GetTickCount();
 
     memset(&t, 0, sizeof(t));
     t.who = "login";
     desk_name(name);
-    if (!desktop_enter_own(&t, name) || !start(d)) {
+    if (!desktop_enter_own(&t, name)) {
         d->up = -1;
     } else {
-        d->up = 1;
+        t0 = slow(d, "entering our desktop", t0);
+        gina = gina_load() != NULL;
+        t0 = slow(d, "loading msgina.dll", t0);
+        id = find_dialog(d);
+        slow(d, "finding the dialog", t0);
+        if (id == 0 || !prepare(d)) {
+            d->up = -1;
+        } else {
+            r = gina && d->look == LOOK_50 ? run_gina(d, &t) : GINA_NO;
+            if (r != GINA_SHOWN && !gina_ending(d)) {
+                d->up = template_dialog(d, id) ? 1 : -1;
+                loop = d->up == 1;
+            }
+        }
     }
     SetEvent(d->ready);
-    while (d->up == 1 && GetMessageW(&msg, NULL, 0, 0) > 0) {
+    while (loop && GetMessageW(&msg, NULL, 0, 0) > 0) {
         if (d->dlg != NULL && IsWindow(d->dlg) &&
             IsDialogMessageW(d->dlg, &msg)) {
             continue;
@@ -2182,13 +2408,16 @@ static DWORD WINAPI ldlg_thread(LPVOID arg)
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+    t0 = GetTickCount();
     if (d->dlg != NULL && IsWindow(d->dlg)) {
         DestroyWindow(d->dlg);
     }
+    t0 = slow(d, "the end of the dialog", t0);
     if (d->ctl != NULL) {
         KillTimer(d->ctl, TIMER_ID);
         DestroyWindow(d->ctl);
     }
+    t0 = slow(d, "the end of the hidden window", t0);
     if (d->mdc != NULL) {
         if (d->mbm != NULL) {
             SelectObject(d->mdc, d->mold);
@@ -2217,9 +2446,11 @@ static DWORD WINAPI ldlg_thread(LPVOID arg)
     if (d->mod != NULL) {
         FreeLibrary(d->mod);
     }
+    t0 = slow(d, "freeing the pictures", t0);
     free(d->rows);
     memset(d->keys, 0, sizeof(d->keys));
     desktop_leave(&t);
+    slow(d, "leaving our desktop", t0);
     return 0;
 }
 
