@@ -1256,8 +1256,12 @@ static int do_remove(void)
 static void plan_text(char *t)
 {
     if (g_ver == 0) {
+#ifdef NO_NT40
+        strcpy(t, "Nothing. This installer is for Windows NT 3.5 and 3.51.");
+#else
         strcpy(t, "Nothing. ntrdps runs only on Windows NT 3.1, 3.5, 3.51 "
                   "and 4.0.");
+#endif
         return;
     }
     sprintf(t,
@@ -1300,7 +1304,11 @@ static void status_text(char *t, int admin)
 #ifdef WITH_NT50
         strcpy(t, "This is not Windows NT 3.1, 3.5, 3.51, 4.0 or 2000.");
 #else
+#ifdef NO_NT40
+        strcpy(t, "This is not Windows NT 3.5 or 3.51.");
+#else
         strcpy(t, "This is not Windows NT 3.1, 3.5, 3.51 or 4.0.");
+#endif
 #endif
         return;
     }
@@ -1643,6 +1651,11 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     (void) show;
     g_inst = inst;
     g_ver = nt_version();
+#ifdef NO_NT40
+    if (g_ver == V40) {
+        g_ver = 0;
+    }
+#endif
     pick_dir();
     quiet = has_opt(cmd, "q");
     install = has_opt(cmd, "install");
@@ -1693,7 +1706,11 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
             say("ntrdps runs only on Windows NT 3.1, 3.5, 3.51, 4.0 and "
                 "2000.\n");
 #else
+#ifdef NO_NT40
+            say("This installer is for Windows NT 3.5 and 3.51.\n");
+#else
             say("ntrdps runs only on Windows NT 3.1, 3.5, 3.51 and 4.0.\n");
+#endif
 #endif
             r = R_FAILED;
         } else if (has_key(REMOVED_KEY)) {

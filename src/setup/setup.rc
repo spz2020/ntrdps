@@ -21,10 +21,14 @@ IDF_LAYER31 NTRDPSFILE  "setup\\nt31\\ntrdpsly.dll"
 #endif
 IDF_EXE35   NTRDPSFILE  "setup\\nt35\\ntrdps.exe"
 IDF_HOOK35  NTRDPSFILE  "setup\\nt35\\ntrdpshk.dll"
+#ifndef NO_LAYER35
 IDF_LAYER35 NTRDPSFILE  "setup\\nt35\\ntrdpsly.dll"
+#endif
+#ifndef NO_NT40
 IDF_MRSYS   NTRDPSFILE  "setup\\nt40\\ntrdpsmr.sys"
 IDF_MRDLL   NTRDPSFILE  "setup\\nt40\\ntrdpsmr.dll"
 IDF_MRDLL0  NTRDPSFILE  "setup\\nt40\\ntrdpsm0.dll"
+#endif
 #ifdef WITH_NT50
 IDF_MRDLL5  NTRDPSFILE  "setup\\nt50\\ntrdpsm5.dll"
 #endif
