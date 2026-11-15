@@ -4,6 +4,8 @@ A Remote Desktop (RDP) Server for Windows NT 3.1, 3.5, 3.51 and 4.0, pre-TSE Hyd
 
 It also runs on Windows 2000 for Alpha: the 32-bit RC2, and the 64-bit build 2210 with its own installer `ntrdpset-axp64.exe`.
 
+It also runs on PINT, Windows NT on the Raspberry Pi: `ntrdpset-pint35.exe` for PINT 3.5 and `ntrdpset-pint40.exe` for PINT 4.0.
+
 Yes you can Remote Desktop to NT 3.1...
 
 ![Windows NT 3.1 on Alpha over RDP](screenshot.png)
