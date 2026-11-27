@@ -1,5 +1,6 @@
-/* ntrdps - RDP console server for Windows NT
- * Copyright (c) 2026 ntrdps authors. MIT License, see LICENSE. */
+/* ntrdps - Windows NT 的 RDP 控制台服务器
+ * 版权所有 (c) 2026 ntrdps 作者。MIT 许可证，见 LICENSE。
+ * 中文界面汉化由 DeepSeek 完成；仅翻译显示文本，版权归原作者。 */
 
 #include <windows.h>
 #include "setup.h"
@@ -37,67 +38,67 @@ IDF_MRDLL5  NTRDPSFILE  "setup\\nt50\\ntrdpsm5.dll"
 #ifdef NTRDPS_LOGIN
 IDD_SETUP DIALOG 0, 0, 268, 152
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ntrdps Setup"
+CAPTION "ntrdps 安装"
 FONT 8, "MS Sans Serif"
 BEGIN
-    LTEXT           "Install RDP (Remote Desktop) Server for WinSta0.",
+    LTEXT           "为 WinSta0 安装 RDP（远程桌面）服务器。",
                     -1, 8, 6, 252, 10
-    AUTOCHECKBOX    "Require &authentication", IDC_CB_LOGIN, 8, 20, 252, 10,
+    AUTOCHECKBOX    "要求身份验证(&A)", IDC_CB_LOGIN, 8, 20, 252, 10,
                     WS_TABSTOP
-    GROUPBOX        "Performance", -1, 4, 36, 260, 38
-    AUTORADIOBUTTON "&Mirror Driver (fast, requires kernel driver)",
+    GROUPBOX        "性能", -1, 4, 36, 260, 38
+    AUTORADIOBUTTON "&镜像驱动（快速，需要内核驱动）",
                     IDC_RB_DRIVER, 10, 47, 248, 10, WS_GROUP | WS_TABSTOP
-    AUTORADIOBUTTON "&GDI Polling (slow, no driver)",
+    AUTORADIOBUTTON "&GDI 轮询（慢，无需驱动）",
                     IDC_RB_POLL, 10, 59, 248, 10
-    GROUPBOX        "Now", -1, 4, 78, 260, 48
+    GROUPBOX        "当前", -1, 4, 78, 260, 48
     LTEXT           "", IDC_STATUS, 10, 89, 248, 34
-    DEFPUSHBUTTON   "&Install", IDC_INSTALL, 51, 132, 50, 14
-    PUSHBUTTON      "&Remove", IDC_REMOVE, 109, 132, 50, 14
-    PUSHBUTTON      "Close", IDCANCEL, 167, 132, 50, 14
+    DEFPUSHBUTTON   "&安装", IDC_INSTALL, 51, 132, 50, 14
+    PUSHBUTTON      "&移除", IDC_REMOVE, 109, 132, 50, 14
+    PUSHBUTTON      "关闭", IDCANCEL, 167, 132, 50, 14
 END
 #else
 IDD_SETUP DIALOG 0, 0, 268, 258
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ntrdps Setup"
+CAPTION "ntrdps 安装"
 FONT 8, "MS Sans Serif"
 BEGIN
-    LTEXT           "ntrdps lets RDP clients (Remote Desktop) use the console of this computer.",
+    LTEXT           "ntrdps 允许 RDP 客户端（远程桌面）使用此计算机的控制台。",
                     -1, 8, 6, 252, 10
-    LTEXT           "No encryption and no login: anyone who can reach TCP port 3389 gets the console. Use it only on a network you trust.",
+    LTEXT           "无加密且无登录：任何能访问 TCP 端口 3389 的人都会获得控制台。请仅在可信网络中使用。",
                     -1, 8, 18, 252, 18
-    GROUPBOX        "How ntrdps watches the screen", -1, 4, 40, 260, 88
-    AUTORADIOBUTTON "&Fast - display driver   (recommended)",
+    GROUPBOX        "ntrdps 如何监视屏幕", -1, 4, 40, 260, 88
+    AUTORADIOBUTTON "&快速 - 显示驱动   （推荐）",
                     IDC_RB_DRIVER, 10, 51, 248, 10, WS_GROUP | WS_TABSTOP
-    LTEXT           "Good: about 9 of 10 fewer bytes on the network, less CPU, and the moving frame shows when you drag a window. Cost: one reboot. Rare risk: a display-driver fault could stop the desktop at boot (fix: boot Last Known Good).",
+    LTEXT           "优点：网络字节数约减少十分之九，CPU 占用更低，拖动窗口时会显示移动画面。代价：需要重启一次。罕见风险：显示驱动故障可能导致启动时桌面停止（修复：启动“最后一次正确配置”）。",
                     -1, 20, 62, 240, 32
-    AUTORADIOBUTTON "&Safe - read the screen (no driver)",
+    AUTORADIOBUTTON "&安全 - 读取屏幕（无需驱动）",
                     IDC_RB_POLL, 10, 98, 248, 10
-    LTEXT           "Good: no driver, no reboot, works on every machine. Cost: slower, more network and CPU, and no moving frame while you drag a window.",
+    LTEXT           "优点：无需驱动、无需重启，适用于所有机器。代价：速度较慢，网络和 CPU 开销更大，拖动窗口时没有移动画面。",
                     -1, 20, 109, 240, 18
-    GROUPBOX        "Install will", -1, 4, 132, 260, 64
+    GROUPBOX        "安装将执行", -1, 4, 132, 260, 64
     LTEXT           "", IDC_PLAN, 10, 143, 248, 50
-    GROUPBOX        "Now", -1, 4, 200, 260, 32
+    GROUPBOX        "当前", -1, 4, 200, 260, 32
     LTEXT           "", IDC_STATUS, 10, 210, 248, 18
-    DEFPUSHBUTTON   "&Install", IDC_INSTALL, 51, 238, 50, 14
-    PUSHBUTTON      "&Remove", IDC_REMOVE, 109, 238, 50, 14
-    PUSHBUTTON      "Close", IDCANCEL, 167, 238, 50, 14
+    DEFPUSHBUTTON   "&安装", IDC_INSTALL, 51, 238, 50, 14
+    PUSHBUTTON      "&移除", IDC_REMOVE, 109, 238, 50, 14
+    PUSHBUTTON      "关闭", IDCANCEL, 167, 238, 50, 14
 END
 #endif
 
 #ifdef NTRDPS_LOGIN
 IDD_ACCOUNT DIALOG 0, 0, 220, 120
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ntrdps account"
+CAPTION "ntrdps 账户"
 FONT 8, "MS Sans Serif"
 BEGIN
     LTEXT           "", IDC_ACC_TEXT, 8, 6, 204, 34
-    LTEXT           "&User name:", -1, 8, 47, 62, 8
+    LTEXT           "用户名(&U):", -1, 8, 47, 62, 8
     EDITTEXT        IDC_LUSER, 72, 45, 140, 12, ES_AUTOHSCROLL
-    LTEXT           "&Password:", -1, 8, 63, 62, 8
+    LTEXT           "密码(&P):", -1, 8, 63, 62, 8
     EDITTEXT        IDC_LPW, 72, 61, 140, 12, ES_PASSWORD | ES_AUTOHSCROLL
-    LTEXT           "Password &again:", -1, 8, 79, 62, 8
+    LTEXT           "再次输入密码(&A):", -1, 8, 79, 62, 8
     EDITTEXT        IDC_LPW2, 72, 77, 140, 12, ES_PASSWORD | ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "OK", IDOK, 52, 100, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 118, 100, 50, 14
+    DEFPUSHBUTTON   "确定", IDOK, 52, 100, 50, 14
+    PUSHBUTTON      "取消", IDCANCEL, 118, 100, 50, 14
 END
 #endif
