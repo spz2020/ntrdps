@@ -41,7 +41,7 @@ setup\setup.obj: setup\setup.c setup\setup.h service\version.h
 	$(CC) $(CFLAGS_MT) $(SETUP_DEFS) $(NT50_DEFS) -Iservice $(SETUP_INC) -Fosetup\setup.obj setup\setup.c
 
 setup\setup.res: setup\setup.rc setup\setup.h $(FILES)
-	rc /c936 -r $(SETUP_DEFS) $(NT50_DEFS) $(SETUP_RCDEFS) -fo setup\setup.res setup\setup.rc
+	rc -r $(SETUP_DEFS) $(NT50_DEFS) $(SETUP_RCDEFS) -fo setup\setup.res setup\setup.rc
 
 setup\setup.rbj: setup\setup.res
 	$(CVTRES) setup\setup.res -o setup\setup.rbj
